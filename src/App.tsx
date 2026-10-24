@@ -4,7 +4,7 @@ import { THRESHOLD } from "./constants"
 import type { ChainResult } from "./domain"
 import { NETWORK } from "./network"
 
-type ScenarioId = "checking" | "success-pass" | "success-warn" | "hold" | "invalid-signature" | "wallet-rejected" | "contract-revert" | "server-error"
+type ScenarioId = "checking" | "success-pass" | "success-warn" | "hold" | "invalid-signature" | "duplicate-fingerprint" | "wallet-rejected" | "contract-revert" | "server-error"
 
 const SCENARIOS: Record<ScenarioId, { label: string; result: ChainResult }> = {
   checking: {
@@ -43,11 +43,13 @@ const SCENARIOS: Record<ScenarioId, { label: string; result: ChainResult }> = {
     },
   },
   hold: {
-    label: "HOLD (0.93)",
+    label: "HOLD · 정산 보류 (0.93)",
     result: {
       signatureVerified: true,
-      mintStatus: "rejected",
-      rejectReason: "HOLD_BLOCKED",
+      mintStatus: "success",
+      txHash:
+        "0x4c19a7e0b2d85f36a1c7e92d0f4b8a6153ce07d9b2a8f41e6d305b9c7a12e4f8",
+      tokenId: 3893,
       similarityScore: 0.93,
       isHold: true,
       riskVerdict: "HOLD",
@@ -61,7 +63,17 @@ const SCENARIOS: Record<ScenarioId, { label: string; result: ChainResult }> = {
       rejectReason: "INVALID_AI_SIGNATURE",
       similarityScore: 0.31,
       isHold: false,
-      riskVerdict: "ERROR",
+      riskVerdict: "PASS",
+    },
+  },
+  "duplicate-fingerprint": {
+    label: "동일 지문 감지 (BLOCK)",
+    result: {
+      signatureVerified: true,
+      mintStatus: "rejected",
+      rejectReason: "DUPLICATE_FINGERPRINT",
+      isHold: false,
+      riskVerdict: "BLOCK",
     },
   },
   "wallet-rejected": {
@@ -629,7 +641,7 @@ function TrackCard({
                   : isWarn
                     ? "warning"
                     : isHold
-                      ? "danger"
+                      ? "warning"
                       : "primary"
               }
             >
@@ -675,7 +687,7 @@ function TrackCard({
               </div>
             )}
           </div>
-          {(isPass || isWarn) && (
+          {(isPass || isWarn || isHold) && (
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -688,10 +700,16 @@ function TrackCard({
           )}
           {isHold && (
             <div className="flex gap-1">
-              <button className="px-2 py-1.5 rounded border border-orange-500/30 text-orange-400 text-[10px]">
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="px-2 py-1.5 rounded border border-orange-500/30 text-orange-400 text-[10px]"
+              >
                 근거 보기
               </button>
-              <button className="px-2 py-1.5 rounded border border-[#30363d] text-[#9CA3AF] text-[10px]">
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="px-2 py-1.5 rounded border border-[#30363d] text-[#9CA3AF] text-[10px]"
+              >
                 이의 제기
               </button>
             </div>
@@ -1174,27 +1192,28 @@ function AIFailView({ onReset }: { onReset: () => void }) {
               </svg>
             </div>
             <div className="flex-1">
-              <div className="text-sm font-bold text-orange-400">
-                HOLD — 검토 및 정산 보류
+              <div className="text-sm font-bold text-red-400">
+                BLOCK — 동일 지문 감지
               </div>
               <div className="text-xs text-[#9CA3AF] font-mono">
                 gatekeeper-v2.1 · 2026-01-13 09:21:44 UTC
               </div>
             </div>
-            <Badge variant="danger">HOLD · 유사도 0.93</Badge>
+            <Badge variant="danger">BLOCK · 민팅 거부</Badge>
           </div>
           <div className="p-6 space-y-5">
             <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
               <div className="text-sm font-semibold text-orange-400 mb-1">
-                유사도 0.93 — 유사한 곡 발견
+                동일 지문 1.00 — 등록된 음원과 일치
               </div>
               <div className="text-xs text-[#9CA3AF]">
                 최근접 음원{" "}
                 <span className="text-white font-mono">
                   "Solar Wind" (Suno v4.5)
                 </span>
-                과 높은 음향 유사도가 확인되어 검토 중입니다. 정산 금액은
-                에스크로에 보류되며 법적 판단을 의미하지 않습니다.
+                과 동일한 오디오 지문이 확인되어 민팅이 거부되었습니다.
+                원작자이거나 사용 허가를 받은 경우 증빙과 함께 이의를 제기할 수
+                있습니다.
               </div>
             </div>
             <div>
@@ -1205,7 +1224,7 @@ function AIFailView({ onReset }: { onReset: () => void }) {
                 {[
                   {
                     title: "Solar Wind",
-                    similarity: 0.93,
+                    similarity: 1,
                     model: "Suno v4.5",
                     flag: true,
                   },
@@ -1269,8 +1288,7 @@ function AIFailView({ onReset }: { onReset: () => void }) {
             </div>
             <div className="text-xs text-[#9CA3AF] bg-[#1c2128] border border-[#30363d] rounded-lg p-3">
               <span className="text-amber-400 font-medium">안내:</span> 생성
-              기록이나 사용 허가 증빙을 첨부해 이의를 제기할 수 있습니다. 검토
-              기한은 예시 14일입니다.
+              기록이나 사용 허가 증빙을 첨부해 이의를 제기할 수 있습니다.
             </div>
           </div>
         </div>
@@ -1832,7 +1850,7 @@ function UploadScreen({ chainResult }: { chainResult: ChainResult }) {
               />
             </svg>
             <span className="text-xs text-amber-400 flex-1">
-              데모 시뮬레이션: 유사도 리스크 케이스 보기
+              데모 시뮬레이션: 동일 지문 BLOCK 케이스 보기
             </span>
             <button
               onClick={() => setFailDemo(!failDemo)}
@@ -1854,7 +1872,7 @@ function UploadScreen({ chainResult }: { chainResult: ChainResult }) {
             className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
           >
             {failDemo
-              ? "AI 검증 시작 (HOLD 케이스 시뮬레이션)"
+              ? "AI 검증 시작 (동일 지문 BLOCK 시뮬레이션)"
               : "AI 검증 후 온체인 Mint"}
           </button>
         </div>
@@ -1880,11 +1898,25 @@ function UploadScreen({ chainResult }: { chainResult: ChainResult }) {
       {stage === "done" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="max-h-[88vh] w-[700px] overflow-y-auto rounded-2xl border border-[#30363d] bg-[#161b22] p-6 shadow-2xl">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+            <div
+              className={`w-14 h-14 rounded-full border flex items-center justify-center mx-auto mb-4 ${
+                chainResult.mintStatus === "rejected"
+                  ? "bg-red-500/10 border-red-500/20"
+                  : chainResult.isHold
+                    ? "bg-amber-500/10 border-amber-500/20"
+                    : "bg-emerald-500/10 border-emerald-500/20"
+              }`}
+            >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M5 13L9 17L19 7"
-                  stroke="#10b981"
+                  stroke={
+                    chainResult.mintStatus === "rejected"
+                      ? "#ef4444"
+                      : chainResult.isHold
+                        ? "#f59e0b"
+                        : "#10b981"
+                  }
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1893,7 +1925,11 @@ function UploadScreen({ chainResult }: { chainResult: ChainResult }) {
             </div>
             <div className="mb-5 text-center">
               <h3 className="text-base font-semibold text-white">
-                음원 등록 결과
+                {chainResult.mintStatus === "rejected"
+                  ? "음원 등록 실패"
+                  : chainResult.isHold
+                    ? "등록 완료 (정산 대기 중)"
+                    : "음원 등록 완료"}
               </h3>
               <p className="mt-1 text-sm text-[#9CA3AF]">
                 {NETWORK.name} ERC-1155 민팅 상태를 확인하세요.
@@ -2188,6 +2224,8 @@ function DetailScreen({
                           ? "verified"
                           : chainResult.riskVerdict === "WARN"
                             ? "warning"
+                            : chainResult.riskVerdict === "HOLD"
+                              ? "warning"
                             : chainResult.riskVerdict === "CHECKING"
                               ? "primary"
                               : "danger"
@@ -2453,16 +2491,27 @@ function DetailScreen({
                   라이선스 구매하기
                 </button>
               ) : chainResult.riskVerdict === "HOLD" || chainResult.isHold ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <button className="rounded-xl border border-orange-500/30 bg-orange-500/10 py-2.5 text-xs font-medium text-orange-400">
-                    근거 보기
-                  </button>
+                <div className="space-y-2">
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] leading-relaxed text-amber-300">
+                    정산 보류 중, 구매 대금은 에스크로에 보관됩니다.
+                  </div>
                   <button
-                    onClick={() => setShowInfringement(true)}
-                    className="rounded-xl border border-[#30363d] bg-[#1c2128] py-2.5 text-xs font-medium text-[#9CA3AF] hover:text-white"
+                    onClick={() => setScreen("checkout")}
+                    className="w-full rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600"
                   >
-                    이의 제기
+                    라이선스 구매
                   </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="rounded-xl border border-orange-500/30 bg-orange-500/10 py-2.5 text-xs font-medium text-orange-400">
+                      근거 보기
+                    </button>
+                    <button
+                      onClick={() => setShowInfringement(true)}
+                      className="rounded-xl border border-[#30363d] bg-[#1c2128] py-2.5 text-xs font-medium text-[#9CA3AF] hover:text-white"
+                    >
+                      이의 제기
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
@@ -2588,7 +2637,7 @@ const initialTxns = [
 const myTracks = [
   {
     title: "Neon Cascade",
-    status: "verified",
+    status: "pass",
     genre: "Electronic",
     model: "Suno v4.5",
     date: "2025-11-03",
@@ -2596,7 +2645,7 @@ const myTracks = [
   },
   {
     title: "Ambient Drift 01",
-    status: "verified",
+    status: "pass",
     genre: "Ambient",
     model: "Udio v2",
     date: "2025-10-14",
@@ -2604,7 +2653,7 @@ const myTracks = [
   },
   {
     title: "Lo-Fi Morning",
-    status: "verified",
+    status: "pass",
     genre: "Lo-Fi",
     model: "Suno v4.5",
     date: "2025-09-22",
@@ -2612,7 +2661,7 @@ const myTracks = [
   },
   {
     title: "Void Echoes",
-    status: "verified",
+    status: "pass",
     genre: "Dark Ambient",
     model: "Udio v2",
     date: "2025-12-08",
@@ -2620,7 +2669,7 @@ const myTracks = [
   },
   {
     title: "Solar Wind",
-    status: "verified",
+    status: "pass",
     genre: "Cinematic",
     model: "Suno v4.5",
     date: "2025-11-20",
@@ -2628,7 +2677,7 @@ const myTracks = [
   },
   {
     title: "Synthetic Pulse",
-    status: "pending",
+    status: "checking",
     genre: "Techno",
     model: "Stable Audio 2.0",
     date: "2026-01-05",
@@ -2636,7 +2685,7 @@ const myTracks = [
   },
   {
     title: "Orion Drift",
-    status: "rejected",
+    status: "hold",
     genre: "Electronic",
     model: "Suno v4.5",
     date: "2026-01-11",
@@ -2650,7 +2699,7 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
   const [animated, setAnimated] = useState(false)
   const [justBought, setJustBought] = useState(false)
   const [trackTab, setTrackTab] =
-    useState<"all" | "verified" | "pending" | "rejected">("all")
+    useState<"all" | "pass" | "checking" | "hold">("all")
   const [showAppeal, setShowAppeal] = useState(false)
   const [expandedTxn, setExpandedTxn] = useState<number | null>(0)
 
@@ -2843,7 +2892,7 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
                 <h3 className="text-sm font-semibold text-white">
                   HOLD 처리 현황 · Void Echoes
                 </h3>
-                <Badge variant="danger">유사도 0.91</Badge>
+                <Badge variant="warning">유사도 0.91</Badge>
               </div>
               <p className="text-xs text-[#9CA3AF] mt-1">
                 정산 10 {NETWORK.currencySymbol}이 에스크로에 보류되어 검토
@@ -2928,7 +2977,7 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#21262d]">
             <h3 className="text-sm font-semibold text-white">내 음원</h3>
             <div className="flex items-center gap-1">
-              {(["all", "verified", "pending", "rejected"] as const).map(
+              {(["all", "pass", "checking", "hold"] as const).map(
                 (tab) => (
                   <button
                     key={tab}
@@ -2941,9 +2990,9 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
                   >
                     {tab === "all"
                       ? "전체"
-                      : tab === "verified"
+                      : tab === "pass"
                         ? "PASS"
-                        : tab === "pending"
+                        : tab === "checking"
                           ? "검증 중"
                           : "HOLD"}
                   </button>
@@ -2962,14 +3011,14 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
                     <span className="text-sm font-medium text-white">
                       {t.title}
                     </span>
-                    {t.status === "verified" && (
+                    {t.status === "pass" && (
                       <Badge variant="verified">✓</Badge>
                     )}
-                    {t.status === "pending" && (
+                    {t.status === "checking" && (
                       <Badge variant="warning">⏳ 검증 중</Badge>
                     )}
-                    {t.status === "rejected" && (
-                      <Badge variant="danger">✗ 거부</Badge>
+                    {t.status === "hold" && (
+                      <Badge variant="warning">정산 대기 중</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-[#9CA3AF] font-mono">
@@ -3091,7 +3140,7 @@ function DashboardScreen({ chainResult }: { chainResult: ChainResult }) {
                           }`}
                         >
                           {tx.status === "frozen"
-                            ? "정산 보류(HOLD)"
+                            ? "정산 대기 중"
                             : "정산 완료"}
                         </div>
                         <div className="text-[9px] font-mono text-blue-400 mt-0.5">
@@ -3153,7 +3202,9 @@ function CheckoutScreen({
               <div>
                 <h3 className="text-base font-semibold text-white">
                   {chainResult.mintStatus === "success"
-                    ? "구매 및 민팅 완료"
+                    ? chainResult.isHold
+                      ? "구매 완료 · 정산 대기 중"
+                      : "구매 및 민팅 완료"
                     : "구매 처리 결과"}
                 </h3>
                 <p className="mt-1 text-xs text-[#9CA3AF]">
@@ -3234,6 +3285,18 @@ function CheckoutScreen({
             </h2>
           </div>
 
+          {chainResult.isHold && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+              <div className="text-xs font-semibold text-amber-400">
+                HOLD · 정산 보류 안내
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-[#9CA3AF]">
+                이 곡은 유사도 검토 중입니다. 결제 금액은 에스크로에 보관되며,
+                검토 결과에 따라 정산됩니다.
+              </p>
+            </div>
+          )}
+
           {/* Order summary */}
           <div className="bg-[#161b22] border border-[#21262d] rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-[#21262d] bg-[#1c2128]">
@@ -3257,7 +3320,17 @@ function CheckoutScreen({
                   <span className="text-xs text-[#9CA3AF]">Suno v4.5</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="verified">PASS · 유사도 0.31</Badge>
+                  <Badge
+                    variant={
+                      chainResult.riskVerdict === "WARN" ||
+                      chainResult.riskVerdict === "HOLD"
+                        ? "warning"
+                        : "verified"
+                    }
+                  >
+                    {chainResult.riskVerdict} · 유사도{" "}
+                    {chainResult.similarityScore?.toFixed(2) ?? "—"}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -3594,7 +3667,13 @@ function CheckoutScreen({
 }
 
 // ─── Certificate ────────────────────────────────────────────────────────────────
-function CertificateScreen({ setScreen }: { setScreen: (s: Screen) => void }) {
+function CertificateScreen({
+  setScreen,
+  chainResult,
+}: {
+  setScreen: (s: Screen) => void
+  chainResult: ChainResult
+}) {
   const steps = [
     {
       num: "01",
@@ -3653,11 +3732,21 @@ function CertificateScreen({ setScreen }: { setScreen: (s: Screen) => void }) {
             </p>
             <div className="flex items-center justify-center gap-3 mt-4 text-xs font-mono text-[#9CA3AF]">
               <span>
-                TX: <span className="text-blue-400">0x7d2f...a91c</span>
+                TX:{" "}
+                <span className="text-blue-400">
+                  {chainResult.txHash
+                    ? `${chainResult.txHash.slice(0, 8)}...${chainResult.txHash.slice(-4)}`
+                    : "—"}
+                </span>
               </span>
               <span>·</span>
               <span>
-                NFT Token ID: <span className="text-white">#3891</span>
+                NFT Token ID:{" "}
+                <span className="text-white">
+                  {chainResult.tokenId !== undefined
+                    ? `#${chainResult.tokenId}`
+                    : "—"}
+                </span>
               </span>
               <span>·</span>
               <span>
@@ -3677,7 +3766,19 @@ function CertificateScreen({ setScreen }: { setScreen: (s: Screen) => void }) {
                 LICENSE RECEIPT · {NETWORK.name}
               </div>
             </div>
-            <Badge variant="verified">PASS · 0.31</Badge>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={
+                  chainResult.riskVerdict === "WARN" ? "warning" : "verified"
+                }
+              >
+                {chainResult.riskVerdict} ·{" "}
+                {chainResult.similarityScore?.toFixed(2) ?? "—"}
+              </Badge>
+              {chainResult.isHold && (
+                <Badge variant="warning">정산 대기 중</Badge>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-x-8 gap-y-3">
             {[
@@ -3687,7 +3788,12 @@ function CertificateScreen({ setScreen }: { setScreen: (s: Screen) => void }) {
               ["판매자 지갑", "0x8f3a...d7e1"],
               ["가격", `50 ${NETWORK.currencySymbol}`],
               ["발급 시각", "2026-01-13 09:21 UTC"],
-              ["트랜잭션 해시", "0x7d2f...a91c"],
+              [
+                "트랜잭션 해시",
+                chainResult.txHash
+                  ? `${chainResult.txHash.slice(0, 8)}...${chainResult.txHash.slice(-4)}`
+                  : "—",
+              ],
               ["IPFS", "QmLf3x7...w9Kp"],
             ].map(([k, v]) => (
               <div
@@ -3981,7 +4087,12 @@ export default function App() {
       {screen === "checkout" && (
         <CheckoutScreen setScreen={setScreen} chainResult={chainResult} />
       )}
-      {screen === "certificate" && <CertificateScreen setScreen={setScreen} />}
+      {screen === "certificate" && (
+        <CertificateScreen
+          setScreen={setScreen}
+          chainResult={chainResult}
+        />
+      )}
       {import.meta.env.DEV && (
         <div className="fixed bottom-5 right-5 z-[120] w-[290px] rounded-xl border border-blue-500/30 bg-[#161b22]/95 p-3 shadow-2xl backdrop-blur">
           <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-blue-400">

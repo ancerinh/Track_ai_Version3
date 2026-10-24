@@ -1,6 +1,6 @@
 export type MintStatus = "idle" | "verifying" | "success" | "rejected"
 
-export type RejectReason = "INVALID_AI_SIGNATURE" | "SIGNATURE_EXPIRED" | "NONCE_ALREADY_USED" | "HOLD_BLOCKED" | "DUPLICATE_FINGERPRINT" | "WALLET_REJECTED" | "WRONG_NETWORK" | "CONTRACT_REVERT"
+export type RejectReason = "INVALID_AI_SIGNATURE" | "SIGNATURE_EXPIRED" | "NONCE_ALREADY_USED" | "DUPLICATE_FINGERPRINT" | "WALLET_REJECTED" | "WRONG_NETWORK" | "CONTRACT_REVERT"
 
 export interface ChainResult {
   signatureVerified: boolean | null
@@ -11,5 +11,5 @@ export interface ChainResult {
   tokenId?: number
   similarityScore?: number
   isHold: boolean
-  riskVerdict: "PASS" | "WARN" | "HOLD" | "ERROR" | "CHECKING"
+  riskVerdict: "PASS" | "WARN" | "HOLD" | "BLOCK" | "ERROR" | "CHECKING"
 }

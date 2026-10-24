@@ -24,11 +24,6 @@ const REJECT_MESSAGES: Record<RejectReason, {
     message: "이미 사용된 요청입니다.",
     tone: "orange",
   },
-  HOLD_BLOCKED: {
-    title: "유사도 HOLD",
-    message: "유사도가 높아 거래가 보류되었습니다.",
-    tone: "red",
-  },
   DUPLICATE_FINGERPRINT: {
     title: "동일 지문 감지",
     message: "이미 등록된 음원과 같은 지문입니다.",
@@ -123,7 +118,9 @@ export default function ChainResultPanel({
       : result.riskVerdict === "WARN"
         ? "orange"
         : result.riskVerdict === "HOLD"
-          ? "red"
+          ? "orange"
+          : result.riskVerdict === "BLOCK"
+            ? "red"
           : result.riskVerdict === "CHECKING"
             ? "blue"
             : "gray"
@@ -154,11 +151,15 @@ export default function ChainResultPanel({
           {result.riskVerdict === "CHECKING" && (
             <span className="h-2.5 w-2.5 animate-spin rounded-full border border-blue-400 border-t-transparent" />
           )}
-          {result.riskVerdict === "ERROR"
-            ? "검증 오류, 재시도"
-            : result.riskVerdict === "CHECKING"
-              ? "검증 중"
-              : result.riskVerdict}
+          {result.riskVerdict === "HOLD"
+            ? "HOLD · 정산 보류"
+            : result.riskVerdict === "BLOCK"
+              ? "BLOCK · 동일 지문"
+              : result.riskVerdict === "ERROR"
+                ? "검증 오류, 재시도"
+                : result.riskVerdict === "CHECKING"
+                  ? "검증 중"
+                  : result.riskVerdict}
         </ValueBadge>
       </div>
 
@@ -225,15 +226,13 @@ export default function ChainResultPanel({
               )}
             <button
               onClick={
-                result.rejectReason === "HOLD_BLOCKED" ||
                 result.rejectReason === "DUPLICATE_FINGERPRINT"
                   ? onAppeal
                   : onRetry
               }
               className="mt-2 rounded border border-[#30363d] bg-[#1c2128] px-2 py-1 text-[10px] font-medium text-white hover:border-[#484f58]"
             >
-              {result.rejectReason === "HOLD_BLOCKED" ||
-              result.rejectReason === "DUPLICATE_FINGERPRINT"
+              {result.rejectReason === "DUPLICATE_FINGERPRINT"
                 ? "이의 제기"
                 : "다시 시도"}
             </button>
@@ -344,10 +343,33 @@ export default function ChainResultPanel({
         )}
       </PanelRow>
       <PanelRow label="Hold Status" description="isHold 상태">
-        <ValueBadge tone={result.isHold ? "red" : "green"}>
-          {result.isHold ? "HOLD" : "정상"}
+        <ValueBadge tone={result.isHold ? "orange" : "green"}>
+          {result.isHold ? "정산 보류 (에스크로)" : "정산 정상"}
         </ValueBadge>
       </PanelRow>
+      {result.isHold && result.mintStatus === "success" && (
+        <div className="border-t border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="text-xs font-semibold text-amber-400">
+            정산 보류 중 (검토 중)
+          </div>
+          <p className="mt-1 text-[10px] leading-relaxed text-[#9CA3AF]">
+            라이선스 NFT는 정상 발급되었습니다. 유사도가 높아 판매 대금은
+            검토가 끝날 때까지 에스크로에 보관되며, 창작자에게 즉시
+            분배되지 않습니다.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-medium text-amber-400">
+              근거 보기
+            </button>
+            <button
+              onClick={onAppeal}
+              className="rounded border border-[#30363d] bg-[#1c2128] px-2.5 py-1.5 text-[10px] font-medium text-white hover:border-[#484f58]"
+            >
+              이의 제기
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
